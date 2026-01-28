@@ -2,759 +2,128 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR.js - Instant AR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Video Marker</title>
+    
+    <!-- AR.js и A-Frame -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/ar.js@latest/aframe/build/aframe-ar.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000;
-            color: white;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-
-        /* Основной AR контейнер */
-        #arScene {
-            width: 100%;
-            height: 100%;
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
-
-        /* Информационный overlay */
-        #infoOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1000;
-            pointer-events: none;
-        }
-
-        .status-bar {
-            position: absolute;
-            top: 30px;
-            left: 30px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            backdrop-filter: blur(10px);
-            max-width: 300px;
-        }
-
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-
-        .status-red {
-            background: #ff4757;
-            box-shadow: 0 0 10px #ff4757;
-        }
-
-        .status-yellow {
-            background: #ffa502;
-            box-shadow: 0 0 10px #ffa502;
-            animation: pulse 1s infinite;
-        }
-
-        .status-green {
-            background: #2ed573;
-            box-shadow: 0 0 10px #2ed573;
-        }
-
-        .status-blue {
-            background: #3742fa;
-            box-shadow: 0 0 10px #3742fa;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.5; }
-            100% { opacity: 1; }
-        }
-
-        /* Управление */
-        .controls {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            display: flex;
-            gap: 15px;
-            z-index: 1001;
-            pointer-events: auto;
-        }
-
-        .control-btn {
-            padding: 15px 25px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s;
-            backdrop-filter: blur(10px);
-            min-width: 120px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .control-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
-        }
-
-        /* Загрузка */
-        #loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            transition: opacity 0.5s;
-        }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top: 4px solid #2ed573;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            font-size: 18px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .loading-subtext {
-            font-size: 14px;
-            color: #aaa;
-            text-align: center;
-            max-width: 300px;
-        }
-
-        /* Запрос разрешения камеры */
-        #cameraPermission {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2001;
-            text-align: center;
-            padding: 20px;
-        }
-
-        .permission-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .permission-text {
-            font-size: 20px;
-            margin-bottom: 10px;
-            max-width: 400px;
-        }
-
-        .permission-subtext {
-            font-size: 16px;
-            color: #aaa;
-            margin-bottom: 30px;
-            max-width: 400px;
-        }
-
-        .permission-btn {
-            padding: 15px 40px;
-            font-size: 18px;
-            background: #2ed573;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            margin: 10px;
-            transition: all 0.3s;
-        }
-
-        .permission-btn:hover {
-            background: #26c464;
-            transform: translateY(-2px);
-        }
-
-        /* Скрытые элементы */
-        .hidden {
-            display: none !important;
-        }
-
-        /* Дополнительная информация */
-        .instructions {
-            position: absolute;
-            bottom: 30px;
-            left: 30px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 15px 20px;
-            border-radius: 12px;
-            font-size: 14px;
-            max-width: 300px;
-            backdrop-filter: blur(10px);
-        }
-
-        /* Адаптивность */
-        @media (max-width: 768px) {
-            .status-bar {
-                top: 20px;
-                left: 20px;
-                right: 20px;
-                max-width: none;
-                font-size: 14px;
-                padding: 12px 15px;
-            }
-            
-            .controls {
-                bottom: 20px;
-                right: 20px;
-                flex-direction: column;
-            }
-            
-            .control-btn {
-                padding: 12px 20px;
-                min-width: 100px;
-                font-size: 14px;
-            }
-            
-            .instructions {
-                bottom: 120px;
-                left: 20px;
-                right: 20px;
-                max-width: none;
-                font-size: 13px;
-            }
-        }
-
-        /* Маркер превью */
-        #markerPreview {
+        body { margin: 0; overflow: hidden; }
+        #overlay {
             position: fixed;
             top: 20px;
-            right: 20px;
-            width: 120px;
-            height: 120px;
-            border: 2px solid #2ed573;
-            border-radius: 8px;
-            overflow: hidden;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1001;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: sans-serif;
+            font-size: 14px;
+            z-index: 999;
             pointer-events: none;
         }
-
-        #markerPreview img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-        }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
-    <!-- Сцена AR.js -->
-    <a-scene id="arScene" embedded arjs="sourceType: webcam; debugUIEnabled: false;" renderer="logarithmicDepthBuffer: true;" vr-mode-ui="enabled: false">
-        
-        <!-- Маркер для AR -->
-        <a-marker id="customMarker" type="pattern" url="data/pattern-marker.patt" vidhandler>
-            <!-- Видео поверх маркера -->
+
+    <div id="overlay">Наведите камеру на маркер</div>
+
+    <a-scene 
+        embedded 
+        renderer="logarithmicDepthBuffer: true;"
+        vr-mode-ui="enabled: false"
+        arjs="trackingMethod: best; sourceType: webcam; debugUIEnabled: false;">
+
+        <!-- Ассеты -->
+        <a-assets>
+            <video 
+                id="ar-video" 
+                src="assets/video.mp4" 
+                preload="auto" 
+                loop 
+                crossorigin="anonymous" 
+                playsinline 
+                webkit-playsinline
+                muted>
+            </video>
+        </a-assets>
+
+        <!-- Кастомный маркер -->
+        <!-- Замените 'custom-marker.patt' на путь к вашему .patt файлу -->
+        <a-marker 
+            type="pattern" 
+            url="assets/pattern-ar_photo.patt"
+            emitevents="true"
+            id="marker">
+            
+            <!-- Видео плоскость -->
+            <!-- Размеры подбираются под соотношение сторон видео (здесь 16:9) -->
             <a-video 
-                id="arVideo"
-                src="#videoAsset"
-                width="1.6" 
-                height="0.9" 
-                position="0 0.5 0"
-                rotation="-90 0 0"
-                visible="false"
-                material="shader: flat;"
-                play-on-click>
+                src="#ar-video" 
+                width="1.125" 
+                height="2" 
+                position="0 0.5 0" 
+                rotation="90 180 0"
+                material="transparent: true; opacity: 1">
             </a-video>
             
-            <!-- Инструкция при потере маркера -->
-            <a-text 
-                value="Наведите на маркер" 
-                position="0 -0.3 0" 
-                align="center" 
-                color="#FFF"
-                scale="0.8 0.8 0.8">
-            </a-text>
+            <!-- Опционально: фон под видео для лучшей видимости -->
+            <a-plane 
+                position="0 0.5 -0.01" 
+                width="2.1" 
+                height="1.225" 
+                color="#000"
+                rotation="90 180 0">
+            </a-plane>
         </a-marker>
-        
+
         <!-- Камера -->
         <a-entity camera></a-entity>
-        
-        <!-- Ресурсы -->
-        <a-assets>
-            <video id="videoAsset" src="" crossorigin="anonymous" preload="auto" loop playsinline webkit-playsinline></video>
-        </a-assets>
-        
     </a-scene>
 
-    <!-- Информационный overlay -->
-    <div id="infoOverlay">
-        <div class="status-bar">
-            <div class="status-indicator status-blue" id="statusIndicator"></div>
-            <span id="statusText">Загрузка AR системы...</span>
-        </div>
-        
-        <div class="instructions">
-            📍 Распечатайте маркер или покажите на другом устройстве<br>
-            🎯 Наведите камеру на маркер<br>
-            🎬 Видео запустится автоматически
-        </div>
-        
-        <div id="markerPreview">
-            <img id="markerImage" crossorigin="anonymous" alt="Маркер">
-        </div>
-    </div>
-
-    <!-- Управление -->
-    <div class="controls">
-        <button class="control-btn" onclick="toggleVideo()" id="playPauseBtn">
-            ⏸️ Пауза
-        </button>
-        <button class="control-btn" onclick="restartVideo()">
-            🔄 Заново
-        </button>
-        <button class="control-btn" onclick="toggleDebug()" id="debugBtn">
-            🔍 Отладка
-        </button>
-    </div>
-
-    <!-- Загрузка -->
-    <div id="loading">
-        <div class="spinner"></div>
-        <div class="loading-text" id="loadingText">Инициализация AR.js...</div>
-        <div class="loading-subtext" id="loadingSubtext">Пожалуйста, подождите</div>
-    </div>
-
-    <!-- Запрос разрешения на камеру -->
-    <div id="cameraPermission" class="hidden">
-        <div class="permission-icon">📷</div>
-        <div class="permission-text">Требуется доступ к камере</div>
-        <div class="permission-subtext">
-            Для работы AR приложения необходим доступ к вашей камере. 
-            Нажмите "Разрешить" и выберите камеру в появившемся окне.
-        </div>
-        <button class="permission-btn" onclick="requestCameraPermission()">
-            Разрешить камеру
-        </button>
-    </div>
-
     <script>
-        // ==================== ВАШИ ДАННЫЕ ====================
-        // ЗАМЕНИТЕ ЭТИ ДАННЫЕ НА СВОИ
-        
-        // 1. ВАШ МАРКЕР (Pattern файл для AR.js)
-        // Для генерации pattern файла: https://jeromeetienne.github.io/AR.js/three.js/examples/marker-training/examples/generator.html
-        const MY_MARKER_PATTERN = `assets/pattern-ar_photo.patt`;
-        
-        // 2. ВАШЕ ВИДЕО (URL)
-        const MY_VIDEO_URL = 'assets/video.mp4';
-        
-        // 3. ВАШ МАРКЕР ИЗОБРАЖЕНИЕ (для превью)
-        const MY_MARKER_IMAGE = 'assets/ar_photo.jpg';
+        const marker = document.querySelector('#marker');
+        const video = document.querySelector('#ar-video');
+        const overlay = document.querySelector('#overlay');
+        let isPlaying = false;
 
-        // ==================== DOM ЭЛЕМЕНТЫ ====================
-        const loadingDiv = document.getElementById('loading');
-        const loadingText = document.getElementById('loadingText');
-        const loadingSubtext = document.getElementById('loadingSubtext');
-        const cameraPermissionDiv = document.getElementById('cameraPermission');
-        const statusIndicator = document.getElementById('statusIndicator');
-        const statusText = document.getElementById('statusText');
-        const playPauseBtn = document.getElementById('playPauseBtn');
-        const debugBtn = document.getElementById('debugBtn');
-        const markerImage = document.getElementById('markerImage');
-        const arScene = document.getElementById('arScene');
-        const arVideo = document.getElementById('arVideo');
-        const videoAsset = document.getElementById('videoAsset');
-
-        // ==================== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ====================
-        let isVideoPlaying = false;
-        let isMarkerDetected = false;
-        let debugMode = false;
-
-        // ==================== ИНИЦИАЛИЗАЦИЯ ====================
-        // Автоматический запуск при загрузке страницы
-        window.addEventListener('load', async function() {
-            console.log('🚀 AR.js приложение запускается...');
+        // Обработка обнаружения маркера
+        marker.addEventListener('markerFound', () => {
+            overlay.textContent = 'Маркер найден! Воспроизведение...';
             
-            // 1. Загрузка маркера и видео
-            await loadResources();
+            // Важно: размутить звук после взаимодействия пользователя
+            // На мобильных видео должно начинаться muted
+            if (video.muted) {
+                video.muted = false;
+            }
             
-            // 2. Запрос доступа к камере
-            showCameraPermissionRequest();
+            video.play().then(() => {
+                isPlaying = true;
+            }).catch(err => {
+                console.error('Ошибка воспроизведения:', err);
+                // Если autoplay заблокирован, показываем кнопку или инструкцию
+                overlay.textContent = 'Нажмите на экран для запуска';
+            });
         });
 
-        // ==================== ЗАГРУЗКА РЕСУРСОВ ====================
-        async function loadResources() {
-            loadingText.textContent = 'Загрузка ресурсов...';
-            
-            try {
-                // Установка видео
-                videoAsset.src = MY_VIDEO_URL;
-                await new Promise((resolve, reject) => {
-                    videoAsset.onloadeddata = resolve;
-                    videoAsset.onerror = reject;
-                });
-                
-                console.log('✅ Видео загружено');
-                
-                // Установка превью маркера
-                markerImage.src = MY_MARKER_IMAGE || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="black"/><text x="50" y="50" font-family="Arial" font-size="14" fill="white" text-anchor="middle" dy=".3em">AR Маркер</text></svg>';
-                
-            } catch (error) {
-                console.error('Ошибка загрузки ресурсов:', error);
-                loadingText.textContent = 'Ошибка загрузки';
-                loadingSubtext.textContent = error.message;
-            }
-        }
+        // Обработка потери маркера
+        marker.addEventListener('markerLost', () => {
+            overlay.textContent = 'Маркер потерян. Поиск...';
+            video.pause();
+            isPlaying = false;
+        });
 
-        // ==================== ДОСТУП К КАМЕРЕ ====================
-        function showCameraPermissionRequest() {
-            loadingDiv.style.display = 'none';
-            cameraPermissionDiv.classList.remove('hidden');
-        }
-
-        async function requestCameraPermission() {
-            loadingText.textContent = 'Запуск камеры...';
-            loadingSubtext.textContent = 'Пожалуйста, подождите';
-            loadingDiv.style.display = 'flex';
-            cameraPermissionDiv.classList.add('hidden');
-            
-            try {
-                // Проверяем поддержку камеры
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Ваш браузер не поддерживает доступ к камере');
-                }
-                
-                // Пробуем получить доступ к камере
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                });
-                
-                // Останавливаем поток, так как AR.js сам его запустит
-                stream.getTracks().forEach(track => track.stop());
-                
-                console.log('✅ Доступ к камере получен');
-                
-                // Запускаем AR.js систему
-                startARJS();
-                
-            } catch (error) {
-                console.error('Ошибка доступа к камере:', error);
-                loadingText.textContent = 'Ошибка доступа к камере';
-                loadingSubtext.textContent = error.message;
-                
-                // Показываем кнопку для повторной попытки
-                setTimeout(() => {
-                    cameraPermissionDiv.classList.remove('hidden');
-                    loadingDiv.style.display = 'none';
-                }, 2000);
-            }
-        }
-
-        // ==================== ЗАПУСК AR.JS ====================
-        function startARJS() {
-            loadingText.textContent = 'Инициализация AR.js...';
-            loadingSubtext.textContent = 'Создание маркера и настройка сцены';
-            
-            // Создаем pattern файл маркера
-            createMarkerPattern();
-            
-            // Настраиваем сцену
-            setupARScene();
-            
-            // Скрываем загрузку через 2 секунды (даем время AR.js на инициализацию)
-            setTimeout(() => {
-                loadingDiv.style.opacity = '0';
-                setTimeout(() => {
-                    loadingDiv.style.display = 'none';
-                    loadingDiv.style.opacity = '1';
-                    
-                    // Обновляем статус
-                    statusIndicator.className = 'status-indicator status-blue';
-                    statusText.textContent = 'Готово! Наведите камеру на маркер';
-                    
-                }, 500);
-            }, 2000);
-        }
-
-        function createMarkerPattern() {
-            // Создаем blob из pattern данных
-            const blob = new Blob([MY_MARKER_PATTERN], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            
-            // Устанавливаем URL для маркера
-            const marker = document.getElementById('customMarker');
-            marker.setAttribute('url', url);
-            
-            console.log('✅ Pattern файл маркера создан');
-        }
-
-        function setupARScene() {
-            // Добавляем обработчики событий маркера
-            const marker = document.getElementById('customMarker');
-            
-            // Когда маркер найден
-            marker.addEventListener('markerFound', function() {
-                console.log('🎯 Маркер обнаружен!');
-                isMarkerDetected = true;
-                
-                // Показываем видео
-                arVideo.setAttribute('visible', 'true');
-                
-                // Запускаем видео
-                const video = document.querySelector('#videoAsset');
-                video.play().then(() => {
-                    isVideoPlaying = true;
-                    playPauseBtn.innerHTML = '⏸️ Пауза';
-                }).catch(error => {
-                    console.warn('Автовоспроизведение заблокировано:', error);
-                    video.muted = true;
-                    video.play();
-                });
-                
-                // Обновляем статус
-                statusIndicator.className = 'status-indicator status-green';
-                statusText.textContent = 'Видео активно ✓';
-            });
-            
-            // Когда маркер потерян
-            marker.addEventListener('markerLost', function() {
-                console.log('⚠️ Маркер потерян');
-                isMarkerDetected = false;
-                
-                // Скрываем видео
-                arVideo.setAttribute('visible', 'false');
-                
-                // Останавливаем видео
-                const video = document.querySelector('#videoAsset');
-                video.pause();
-                isVideoPlaying = false;
-                playPauseBtn.innerHTML = '▶️ Воспр.';
-                
-                // Обновляем статус
-                statusIndicator.className = 'status-indicator status-blue';
-                statusText.textContent = 'Наведите на маркер';
-            });
-            
-            // Компонент для управления видео по клику
-            AFRAME.registerComponent('play-on-click', {
-                init: function () {
-                    this.onClick = this.onClick.bind(this);
-                    this.el.addEventListener('click', this.onClick);
-                },
-                onClick: function (evt) {
-                    const video = this.el.components.material.material.map.image;
-                    
-                    if (!video) return;
-                    
-                    if (video.paused) {
-                        video.play();
-                        isVideoPlaying = true;
-                        playPauseBtn.innerHTML = '⏸️ Пауза';
-                    } else {
-                        video.pause();
-                        isVideoPlaying = false;
-                        playPauseBtn.innerHTML = '▶️ Воспр.';
-                    }
-                }
-            });
-            
-            // Компонент для обработки видео
-            AFRAME.registerComponent('vidhandler', {
-                init: function () {
-                    this.toggle = false;
-                    this.vid = document.querySelector("#videoAsset");
-                    this.vid.pause();
-                }
-            });
-            
-            console.log('✅ AR.js сцена настроена');
-        }
-
-        // ==================== УПРАВЛЕНИЕ ВИДЕО ====================
-        function toggleVideo() {
-            if (!isMarkerDetected) return;
-            
-            const video = document.querySelector('#videoAsset');
-            if (!video) return;
-            
-            if (isVideoPlaying) {
-                video.pause();
-                playPauseBtn.innerHTML = '▶️ Воспр.';
-                isVideoPlaying = false;
-            } else {
-                video.play().then(() => {
-                    playPauseBtn.innerHTML = '⏸️ Пауза';
-                    isVideoPlaying = true;
-                }).catch(error => {
-                    console.warn('Ошибка воспроизведения:', error);
-                });
-            }
-        }
-
-        function restartVideo() {
-            if (!isMarkerDetected) return;
-            
-            const video = document.querySelector('#videoAsset');
-            if (!video) return;
-            
-            video.currentTime = 0;
-            if (!isVideoPlaying) {
+        // Для iOS/Android: обработка первого клика для разблокировки аудио
+        document.body.addEventListener('click', () => {
+            if (video.paused && marker.object3D.visible) {
                 video.play();
-                isVideoPlaying = true;
-                playPauseBtn.innerHTML = '⏸️ Пауза';
+                video.muted = false;
             }
-        }
-
-        function toggleDebug() {
-            debugMode = !debugMode;
-            
-            // Включаем/выключаем debug UI AR.js
-            const arjs = arScene.getAttribute('arjs');
-            if (debugMode) {
-                arjs.debugUIEnabled = true;
-                debugBtn.innerHTML = '👁️‍🗨️ Обычный';
-            } else {
-                arjs.debugUIEnabled = false;
-                debugBtn.innerHTML = '🔍 Отладка';
-            }
-            
-            arScene.setAttribute('arjs', arjs);
-        }
-
-        // ==================== ГЛОБАЛЬНЫЙ ДОСТУП ====================
-        window.requestCameraPermission = requestCameraPermission;
-        window.toggleVideo = toggleVideo;
-        window.restartVideo = restartVideo;
-        window.toggleDebug = toggleDebug;
-
-        // ==================== ОБРАБОТКА ОШИБОК ====================
-        // Обработка ошибок AR.js
-        arScene.addEventListener('arjs-video-loaded', function() {
-            console.log('✅ Видео AR.js загружено');
-        });
-
-        arScene.addEventListener('error', function(error) {
-            console.error('Ошибка AR.js:', error);
-            statusIndicator.className = 'status-indicator status-red';
-            statusText.textContent = 'Ошибка AR системы';
-        });
-
-        // ==================== ОБРАБОТКА ВЫХОДА ====================
-        window.addEventListener('beforeunload', function() {
-            // Останавливаем видео
-            const video = document.querySelector('#videoAsset');
-            if (video) {
-                video.pause();
-                video.currentTime = 0;
-            }
-            
-            // Останавливаем камеру через AR.js
-            const scene = document.querySelector('a-scene');
-            if (scene && scene.systems && scene.systems.arjs) {
-                scene.systems.arjs._stopCamera();
-            }
-        });
-
-        // ==================== ПОМОЩЬ ПО МАРКЕРУ ====================
-        // Функция для генерации pattern файла
-        function generateMarkerPattern() {
-            console.log(`
-            📝 Для создания собственного pattern файла:
-            
-            1. Перейдите на: https://jeromeetienne.github.io/AR.js/three.js/examples/marker-training/examples/generator.html
-            
-            2. Загрузите ваше изображение маркера
-            
-            3. Настройте параметры:
-               - Pattern ratio: 0.5
-               - Image size: 512
-               
-            4. Нажмите "Download Pattern"
-            
-            5. Скопируйте содержимое файла .patt в переменную MY_MARKER_PATTERN
-            
-            6. Сохраните изображение маркера (появится в левом верхнем углу)
-               и используйте его как MY_MARKER_IMAGE
-            
-            ⚠️ Важно: Маркер должен быть высококонтрастным и уникальным!
-            `);
-        }
-        
-        // Показываем инструкцию в консоли
-        console.log(`
-        =============================================
-        🎯 AR.js ПРИЛОЖЕНИЕ - ИНСТРУКЦИЯ
-        =============================================
-        
-        ДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЯ:
-        1. Откройте страницу → автоматически запросится камера
-        2. Разрешите доступ к камере
-        3. Наведите камеру на маркер
-        4. Видео запустится автоматически
-        
-        НАСТРОЙКА МАРКЕРА:
-        1. Замените MY_MARKER_PATTERN на ваш pattern
-        2. Замените MY_VIDEO_URL на ваше видео
-        3. Замените MY_MARKER_IMAGE на превью маркера
-        
-        ДЛЯ СОЗДАНИЯ МАРКЕРА:
-        В консоли вызовите: generateMarkerPattern()
-        
-        =============================================
-        `);
-        
-        // Делаем функцию доступной из консоли
-        window.generateMarkerPattern = generateMarkerPattern;
+        }, { once: true });
     </script>
 </body>
 </html>

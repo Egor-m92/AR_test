@@ -113,6 +113,17 @@
                 webkit-playsinline
                 muted>
             </video>
+
+            <video 
+                id="video1" 
+                src="./video1.mp4" 
+                preload="auto" 
+                loop 
+                crossorigin="anonymous" 
+                playsinline
+                webkit-playsinline
+                muted>
+            </video>
         </a-assets>
 
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
@@ -136,27 +147,66 @@
             </a-plane>
         </a-entity>
 
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-video 
+                src="#video1"
+                scale="1.125 2 1"
+                position="0 0 0"
+                rotation="0 0 0"
+                material="shader: flat; transparent: true">
+            </a-video>
+            
+            <!-- Черная подложка только под видео -->
+            <a-plane 
+                position="0 0 -0.01" 
+                scale="1.2 2.1 1" 
+                color="#000" 
+                opacity="0.5"
+                material="shader: flat; transparent: true">
+            </a-plane>
+        </a-entity>
+
     </a-scene>
 
     <script>
         class ARController {
             constructor() {
-                this.video = null;
+                this.markers = [
+                    {
+                        index: 0,
+                        videoId: 'video0',
+                        name: 'Маркер 1'
+                    },
+                    {
+                        index: 1,
+                        videoId: 'video1',
+                        name: 'Маркер 2'
+                    }
+                ]
+
+                this.videos = {};
+                this.activeMarker = null;
                 this.isAudioUnlocked = false;
                 this.init();
             }
             
             init() {
-                this.video = document.getElementById('video0');
-                if (this.video) {
-                    this.video.muted = true;
-                    this.video.playsInline = true;
-                    this.video.load();
-                }
-                
+                this.cacheVideos();
                 this.setupTransparency();
                 this.setupEvents();
                 this.setupUnlock();
+            }
+
+            cacheVideos() {
+                this.markers.forEach(marker => {
+                    const video = document.getElementById(marker.videoId);
+                    if (video) {
+                        video.muted = true;
+                        video.playsInline = true;
+                        this.videos[marker.index] = video;
+                        video.load();
+                    }
+                });
             }
             
             // КЛЮЧЕВОЙ ФИКС: принудительная прозрачность для мобильных
@@ -207,50 +257,92 @@
                     document.getElementById('status').style.background = 'red';
                 });
                 
-                const entity = document.querySelector('[mindar-image-target="targetIndex: 0"]');
-                
-                entity.addEventListener('targetFound', () => {
-                    document.getElementById('status').textContent = 'Воспроизведение';
-                    document.getElementById('status').className = 'status-found';
-                    this.playVideo();
+                this.markers.forEach(marker => {
+                    const entity = document.querySelector(`[mindar-image-target="targetIndex: ${marker.index}"]`);
+                    
+                    if (!entity) {
+                        console.warn(`Маркер ${marker.index} не найден в HTML`);
+                        return;
+                    }
+                    
+                    entity.addEventListener('targetFound', () => {
+                        console.log(`Найден: ${marker.name}`);
+                        this.activeMarker = marker.index;
+                        this.updateStatus(`Воспроизведение: ${marker.name}`, 'found');
+                        this.playVideo(marker.index);
+                    });
+                    
+                    entity.addEventListener('targetLost', () => {
+                        if (this.activeMarker === marker.index) {
+                            console.log(`Потерян: ${marker.name}`);
+                            this.activeMarker = null;
+                            this.updateStatus('Наведите на изображение', 'scanning');
+                            this.pauseVideo(marker.index);
+                        }
+                    });
                 });
                 
-                entity.addEventListener('targetLost', () => {
-                    document.getElementById('status').textContent = 'Наведите на изображение';
-                    document.getElementById('status').className = '';
-                    this.pauseVideo();
+                // Пауза при сворачивании
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        Object.values(this.videos).forEach(video => video.pause());
+                    } else if (this.activeMarker !== null) {
+                        this.playVideo(this.activeMarker);
+                    }
                 });
             }
             
-            async playVideo() {
-                if (!this.video) return;
-                this.video.currentTime = 0;
-                if (!this.isAudioUnlocked) this.video.muted = true;
+            async playVideo(index) {
+                const video = this.videos[index];
+                if (!video) return;
                 
                 try {
-                    await this.video.play();
-                    if (this.isAudioUnlocked) this.video.muted = false;
+                    video.currentTime = 0;
+                    if (!this.isAudioUnlocked) video.muted = true;
+                    
+                    await video.play();
+                    
+                    if (this.isAudioUnlocked) video.muted = false;
                 } catch (err) {
-                    console.log('Autoplay blocked');
+                    console.log('Autoplay blocked for marker', index);
+                    video.muted = true;
+                    try {
+                        await video.play();
+                    } catch (e) {
+                        console.error('Play failed', e);
+                    }
                 }
             }
             
-            pauseVideo() {
-                if (this.video) {
-                    this.video.pause();
-                    if (!this.isAudioUnlocked) this.video.muted = true;
-                }
+            pauseVideo(index) {
+                const video = this.videos[index];
+                if (!video) return;
+                video.pause();
+                if (!this.isAudioUnlocked) video.muted = true;
             }
             
-            setupUnlock() {
+            setupInteractionUnlock() {
                 const unlock = () => {
                     this.isAudioUnlocked = true;
-                    if (this.video) this.video.muted = false;
-                    document.getElementById('status').textContent = 'Звук включен';
+                    
+                    // Включаем звук для активного видео
+                    if (this.activeMarker !== null) {
+                        const video = this.videos[this.activeMarker];
+                        if (video) video.muted = false;
+                    }
+                    
+                    this.updateStatus(this.activeMarker !== null ? 'Звук включен' : 'Наведите на изображение', 
+                        this.activeMarker !== null ? 'found' : 'scanning');
                 };
                 
                 document.body.addEventListener('click', unlock, { once: true });
                 document.body.addEventListener('touchstart', unlock, { once: true });
+            }
+            
+            updateStatus(text, state) {
+                const status = document.getElementById('status');
+                status.textContent = text;
+                status.className = state === 'found' ? 'status-found' : 'status-scanning';
             }
         }
         

@@ -3,15 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>AR Vertical Video</title>
     
-    <!-- MindAR + A-Frame (CDN, никакого npm) -->
+    <!-- MindAR + A-Frame -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image.prod.js"></script>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image-aframe.prod.js"></script>
     
     <style>
-        body { margin: 0; overflow: hidden; font-family: -apple-system, sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        html, body { 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Полноэкранный режим для iOS Safari */
+        body {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
         
         #loader {
             position: fixed;
@@ -50,10 +68,24 @@
             z-index: 1000;
             pointer-events: none;
             transition: all 0.3s;
+            white-space: nowrap;
         }
         
         .status-found { background: rgba(76,175,80,0.9) !important; }
         .status-scanning { background: rgba(255,193,7,0.9) !important; color: #000; }
+        
+        /* Фикс для полноэкранного canvas */
+        a-scene {
+            width: 100vw !important;
+            height: 100vh !important;
+            position: fixed !important;
+            top: 0;
+            left: 0;
+        }
+        
+        video {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -61,7 +93,8 @@
     <!-- Загрузчик -->
     <div id="loader">
         <div class="spinner"></div>
-        <div>Инициализация камеры...</div>
+        <div>Запуск камеры...</div>
+        <div style="font-size: 12px; margin-top: 10px; opacity: 0.7;">Разрешите доступ к камере</div>
     </div>
 
     <!-- Статус -->
@@ -71,11 +104,10 @@
         mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
         embedded 
         renderer="colorManagement: true; physicallyCorrectLights: true"
-        vr-mode-ui="enabled: false">
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
         
-        <!-- Ассеты -->
         <a-assets>
-            <!-- Видео: playsinline и muted обязательны для автозапуска на мобильных -->
             <video 
                 id="video0" 
                 src="./video.mp4" 
@@ -84,26 +116,16 @@
                 crossorigin="anonymous" 
                 playsinline
                 webkit-playsinline
-                muted>
+                muted
+                style="display:none">
             </video>
-            
-            <!-- Добавь сюда ещё видео для других маркеров:
-            <video id="video1" src="./video2.mp4" preload="auto" loop playsinline muted></video>
-            -->
         </a-assets>
 
-        <!-- Камера -->
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <!-- МАРКЕР 0 (первый) -->
         <a-entity mindar-image-target="targetIndex: 0">
-            <!-- 
-                Видео 9:16 (вертикальное):
-                - scale="0.5625 1 1" означает ширина = 0.5625 от высоты (9/16 = 0.5625)
-                - position="0 0 0" - центр маркера
-                - rotation="0 0 0" - если нужно повернуть, измени
-            -->
             <a-video 
+                id="ar-video-0"
                 src="#video0"
                 scale="0.5625 1 1"
                 position="0 0 0"
@@ -111,7 +133,6 @@
                 material="shader: flat; transparent: true">
             </a-video>
             
-            <!-- Опционально: тень/подложка для лучшей видимости -->
             <a-plane 
                 position="0 0 -0.01" 
                 scale="0.6 1.05 1" 
@@ -121,32 +142,19 @@
             </a-plane>
         </a-entity>
 
-        <!-- 
-        ДОБАВИТЬ ВТОРОЙ МАРКЕР:
-        <a-entity mindar-image-target="targetIndex: 1">
-            <a-video src="#video1" scale="0.5625 1 1" position="0 0 0"></a-video>
-        </a-entity>
-        -->
-
     </a-scene>
 
     <script>
         class ARController {
             constructor() {
-                // Конфигурация: добавляй сюда новые маркеры и видео
                 this.markers = [
-                    {
-                        index: 0,
-                        videoId: 'video0',
-                        name: 'Маркер 1'
-                    }
-                    // Добавить следующий маркер:
-                    // ,{ index: 1, videoId: 'video1', name: 'Маркер 2' }
+                    { index: 0, videoId: 'video0', name: 'Маркер 1' }
                 ];
                 
                 this.videos = {};
                 this.activeMarker = null;
                 this.isAudioUnlocked = false;
+                this.hasInteraction = false;
                 
                 this.init();
             }
@@ -155,19 +163,27 @@
                 this.cacheVideos();
                 this.setupEventListeners();
                 this.setupInteractionUnlock();
+                this.handleResize();
             }
             
             cacheVideos() {
-                // Кэшируем видео элементы
                 this.markers.forEach(marker => {
-                    this.videos[marker.index] = document.getElementById(marker.videoId);
+                    const video = document.getElementById(marker.videoId);
+                    if (video) {
+                        // Важно: muted обязателен для автозапуска
+                        video.muted = true;
+                        video.playsInline = true;
+                        this.videos[marker.index] = video;
+                        
+                        // Предзагрузка
+                        video.load();
+                    }
                 });
             }
             
             setupEventListeners() {
                 const scene = document.querySelector('a-scene');
                 
-                // Скрываем загрузчик после старта
                 scene.addEventListener('arReady', () => {
                     document.getElementById('loader').style.opacity = '0';
                     setTimeout(() => {
@@ -175,43 +191,41 @@
                     }, 500);
                 });
                 
-                // Обработка ошибок
                 scene.addEventListener('arError', (e) => {
                     console.error('AR Error:', e);
-                    document.getElementById('status').textContent = 'Ошибка камеры';
+                    document.getElementById('status').textContent = 'Ошибка камеры. Перезагрузите страницу';
+                    document.getElementById('status').style.background = 'rgba(244,67,54,0.9)';
                 });
                 
-                // События для каждого маркера
                 this.markers.forEach(marker => {
                     const entity = document.querySelector(`[mindar-image-target="targetIndex: ${marker.index}"]`);
                     
-                    if (!entity) {
-                        console.error(`Маркер ${marker.index} не найден в сцене`);
-                        return;
-                    }
+                    if (!entity) return;
                     
-                    // МАРКЕР НАЙДЕН
                     entity.addEventListener('targetFound', () => {
                         console.log(`Найден: ${marker.name}`);
                         this.activeMarker = marker.index;
-                        
-                        // Обновляем UI
-                        this.updateStatus(`Найдено: ${marker.name}`, 'found');
-                        
-                        // Запускаем видео
+                        this.updateStatus(`Воспроизведение`, 'found');
                         this.playVideo(marker.index);
                     });
                     
-                    // МАРКЕР ПОТЕРЯН
                     entity.addEventListener('targetLost', () => {
                         if (this.activeMarker === marker.index) {
                             console.log(`Потерян: ${marker.name}`);
                             this.activeMarker = null;
-                            
                             this.updateStatus('Наведите на изображение', 'scanning');
                             this.pauseVideo(marker.index);
                         }
                     });
+                });
+                
+                // Обработка смены видимости вкладки
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        Object.values(this.videos).forEach(video => video.pause());
+                    } else if (this.activeMarker !== null) {
+                        this.playVideo(this.activeMarker);
+                    }
                 });
             }
             
@@ -219,47 +233,91 @@
                 const video = this.videos[index];
                 if (!video) return;
                 
-                // Сбрасываем на начало
-                video.currentTime = 0;
-                
                 try {
-                    // Пытаемся запустить
-                    await video.play();
+                    // Всегда сбрасываем на начало
+                    video.currentTime = 0;
                     
-                    // Разблокируем звук если возможно (требует взаимодействия пользователя)
-                    if (this.isAudioUnlocked) {
-                        video.muted = false;
+                    // Гарантируем muted для автозапуска
+                    if (!this.isAudioUnlocked) {
+                        video.muted = true;
                     }
                     
+                    const playPromise = video.play();
+                    
+                    if (playPromise !== undefined) {
+                        await playPromise;
+                        console.log('Видео запущено');
+                        
+                        // Пробуем включить звук если разблокирован
+                        if (this.isAudioUnlocked && video.muted) {
+                            video.muted = false;
+                        }
+                    }
                 } catch (err) {
-                    console.log('Автозапуск заблокирован, ожидаем клик...');
-                    this.updateStatus('Нажмите на экран для звука', 'scanning');
+                    console.error('Ошибка воспроизведения:', err);
+                    // Fallback: пробуем еще раз с muted
+                    video.muted = true;
+                    try {
+                        await video.play();
+                    } catch (e) {
+                        this.updateStatus('Нажмите экран для запуска', 'scanning');
+                    }
                 }
             }
             
             pauseVideo(index) {
                 const video = this.videos[index];
                 if (!video) return;
-                
                 video.pause();
-                video.muted = true; // Возвращаем muted для следующего autoplay
+                // Возвращаем muted для следующего autoplay
+                if (!this.isAudioUnlocked) {
+                    video.muted = true;
+                }
             }
             
-            // Разблокировка аудио по клику (требование iOS/Android)
             setupInteractionUnlock() {
-                const unlockAudio = () => {
+                const unlockHandler = () => {
+                    if (this.hasInteraction) return;
+                    this.hasInteraction = true;
                     this.isAudioUnlocked = true;
                     
-                    // Если маркер уже активен, включаем звук
+                    // Включаем звук для активного видео
                     if (this.activeMarker !== null) {
                         const video = this.videos[this.activeMarker];
-                        if (video) video.muted = false;
+                        if (video) {
+                            video.muted = false;
+                            console.log('Звук разблокирован');
+                        }
                     }
+                    
+                    this.updateStatus(this.activeMarker !== null ? 'Звук включен' : 'Наведите на изображение', 
+                        this.activeMarker !== null ? 'found' : 'scanning');
                 };
                 
-                // Слушаем первый клик/тач
-                document.body.addEventListener('click', unlockAudio, { once: true });
-                document.body.addEventListener('touchstart', unlockAudio, { once: true });
+                // Слушаем любое взаимодействие
+                document.addEventListener('click', unlockHandler, { once: true });
+                document.addEventListener('touchstart', unlockHandler, { once: true });
+                document.addEventListener('pointerdown', unlockHandler, { once: true });
+            }
+            
+            handleResize() {
+                // Фикс для корректного размера canvas на мобильных
+                window.addEventListener('resize', () => {
+                    const canvas = document.querySelector('canvas');
+                    if (canvas) {
+                        canvas.style.width = '100vw';
+                        canvas.style.height = '100vh';
+                    }
+                });
+                
+                // Начальная установка
+                setTimeout(() => {
+                    const canvas = document.querySelector('canvas');
+                    if (canvas) {
+                        canvas.style.width = '100vw';
+                        canvas.style.height = '100vh';
+                    }
+                }, 1000);
             }
             
             updateStatus(text, state) {
@@ -269,7 +327,6 @@
             }
         }
         
-        // Запуск после загрузки страницы
         window.addEventListener('load', () => {
             new ARController();
         });

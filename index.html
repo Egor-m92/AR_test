@@ -95,9 +95,16 @@
 
     <!-- Добавлен renderer="alpha: true" и background="transparent" -->
     <a-scene 
-        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.0001; filterBeta: 0.001; warmupTolerance: 3; missTolerance: 3;"
+        mindar-image="imageTargetSrc: ./targets.mind; 
+        autoStart: true; 
+        uiLoading: no; 
+        uiScanning: no; 
+        filterMinCF: 0.0001; 
+        filterBeta: 0.001; 
+        warmupTolerance: 1; 
+        missTolerance: 5; "
         embedded 
-        renderer="alpha: true; antialias: true; colorManagement: true; physicallyCorrectLights: true; precision: lowp powerPreference: high-performance;"
+        renderer="alpha: true; antialias: true; colorManagement: false; physicallyCorrectLights: false; precision: lowp powerPreference: high-performance;"
         vr-mode-ui="enabled: false"
         background="transparent"
         device-orientation-permission-ui="enabled: false">
@@ -134,16 +141,16 @@
                 scale="1.125 2 1"
                 position="0 0 0"
                 rotation="0 0 0"
-                material="shader: flat; transparent: true">
+                material="shader: flat; transparent: false"
+                raycastable="false">
             </a-video>
             
             <!-- Черная подложка только под видео -->
             <a-plane 
                 position="0 0 -0.01" 
-                scale="1.2 2.1 1" 
+                scale="1.13 2.005 1" 
                 color="#000" 
-                opacity="0.5"
-                material="shader: flat; transparent: true">
+                material="shader: flat; transparent: false">
             </a-plane>
         </a-entity>
 
@@ -153,16 +160,16 @@
                 scale="1.125 2 1"
                 position="0 0 0"
                 rotation="0 0 0"
-                material="shader: flat; transparent: true">
+                material="shader: flat; transparent: false"
+                raycastable="false">
             </a-video>
             
             <!-- Черная подложка только под видео -->
             <a-plane 
                 position="0 0 -0.01" 
-                scale="1.2 2.1 1" 
+                scale="1.13 2.005 1" 
                 color="#000" 
-                opacity="0.5"
-                material="shader: flat; transparent: true">
+                material="shader: flat; transparent: false">
             </a-plane>
         </a-entity>
 
@@ -187,6 +194,10 @@
                 this.videos = {};
                 this.activeMarker = null;
                 this.isAudioUnlocked = false;
+
+                this.lastPositions = {};
+                this.lerpFactor = 0.1;
+
                 this.init();
             }
             

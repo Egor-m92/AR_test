@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>AR Vertical Video</title>
+    <title>Museum AR Dobrush</title>
     
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.0/dist/mindar-image.prod.js"></script>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
@@ -95,9 +95,9 @@
 
     <!-- Добавлен renderer="alpha: true" и background="transparent" -->
     <a-scene 
-        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no;"
+        mindar-image="imageTargetSrc: ./targets.mind; autoStart: true; uiLoading: no; uiScanning: no; filterMinCF: 0.0001; filterBeta: 0.001; warmupTolerance: 3; missTolerance: 3;"
         embedded 
-        renderer="alpha: true; antialias: true; colorManagement: true; physicallyCorrectLights: true; precision: mediump"
+        renderer="alpha: true; antialias: true; colorManagement: true; physicallyCorrectLights: true; precision: lowp powerPreference: high-performance;"
         vr-mode-ui="enabled: false"
         background="transparent"
         device-orientation-permission-ui="enabled: false">
@@ -175,12 +175,12 @@
                     {
                         index: 0,
                         videoId: 'video0',
-                        name: 'Маркер 1'
+                        name: 'Боль войны'
                     },
                     {
                         index: 1,
                         videoId: 'video1',
-                        name: 'Маркер 2'
+                        name: 'И.П.Шамякин'
                     }
                 ]
 
@@ -194,7 +194,8 @@
                 this.cacheVideos();
                 this.setupTransparency();
                 this.setupEvents();
-                this.setupUnlock();
+                this.setupSmoothing();
+                this.setupInteractionUnlock();
             }
 
             cacheVideos() {
@@ -319,6 +320,37 @@
                 if (!video) return;
                 video.pause();
                 if (!this.isAudioUnlocked) video.muted = true;
+            }
+
+            setupSmoothing() {
+                const scene = document.querySelector('a-scene');
+                
+                scene.addEventListener('renderstart', () => {
+                    const tick = () => {
+                        if (this.activeMarker !== null) {
+                            const entity = document.querySelector(`[mindar-image-target="targetIndex: ${this.activeMarker}"]`);
+                            if (entity && entity.object3D) {
+                                // Плавное сглаживание позиции
+                                const currentPos = entity.object3D.position;
+                                const lastPos = this.lastPositions[this.activeMarker];
+                                
+                                if (lastPos) {
+                                    currentPos.x += (lastPos.x - currentPos.x) * this.lerpFactor;
+                                    currentPos.y += (lastPos.y - currentPos.y) * this.lerpFactor;
+                                    currentPos.z += (lastPos.z - currentPos.z) * this.lerpFactor;
+                                }
+                                
+                                this.lastPositions[this.activeMarker] = {
+                                    x: currentPos.x,
+                                    y: currentPos.y,
+                                    z: currentPos.z
+                                };
+                            }
+                        }
+                        requestAnimationFrame(tick);
+                    };
+                    tick();
+                });
             }
             
             setupInteractionUnlock() {
